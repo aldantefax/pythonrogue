@@ -1,6 +1,6 @@
 import libtcodpy as libtcod
  
-# test commit 123
+# test commit 321
 # Variables to denote window size in abstract points
 SCREEN_WIDTH = 80
 SCREEN_HEIGHT = 50
