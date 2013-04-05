@@ -160,6 +160,10 @@ def make_map():
             #determine center coords of this room.
             (new_x, new_y) = new_room.center()
             
+            #generate room number to show how the generation system works.
+            room_no = Object(new_x, new_y, chr(65+num_rooms), libtcod.white)
+            objects.insert(0, room_no) #draw the room numbers before drawing other elements
+            
             #this slaps the player into the center of the first room generated.
             if num_rooms == 0:
                 player.x = new_x
