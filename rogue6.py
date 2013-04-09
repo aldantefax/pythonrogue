@@ -136,14 +136,42 @@ class Object:
     # utilize the clear method to remove the Object from the buffer console
     def clear(self):
         libtcod.console_put_char(con, self.x, self.y, ' ', libtcod.BKGND_NONE)
+        
+    def send_to_back(self):
+        #draw this object first so all others appear above it if they occupy the same tile
+        global objects
+        objects.remove(self)
+        objects.insert(0, self)
 
 class Fighter:
     # combat statistics for monsters, players, and NPCs
-    def __init__(self, hp, defense, power):
+    def __init__(self, hp, defense, power, death_function=None):
         self.max_hp = hp
         self.hp = hp
         self.defense = defense
         self.power = power
+        self.death_function = death_function
+    
+    #damage routine
+    def take_damage(self, damage):
+        #if there's any damage to apply do it
+        if damage > 0:
+            self.hp -= damage
+            
+            if self.hp <= 0:
+                function = self.death_function
+                if function is not None:
+                    function(self.owner)
+            
+    #attack routine
+    def attack(self, target):
+        damage = self.power - target.fighter.defense
+        
+        if damage > 0:
+            print self.owner.name.capitalize() + ' attacks ' + target.name + ' for ' + str(damage) + ' hit points.'
+            target.fighter.take_damage(damage)
+        else: 
+            print self.owner.name.capitalize() + ' attacks ' + target.name + ' but it has no effect!'
 
 class BasicMonster:
     # AI for a basic monster.
@@ -155,7 +183,7 @@ class BasicMonster:
             if monster.distance_to(player) >= 2:
                 monster.move_towards(player.x, player.y)
             elif player.fighter.hp > 0:
-                print 'The attack of the ' + monster.name + ' glances away!'
+                monster.fighter.attack(player)
         
 
 ##########################################################################################
@@ -300,19 +328,19 @@ def place_objects(room):
         if not is_blocked(x, y):
             choice = libtcod.random_get_int(0, 0, 100)
             if choice < 20:
-                fighter_component = Fighter(hp=10, defense=0, power=3)
+                fighter_component = Fighter(hp=10, defense=0, power=3, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'h', 'human', libtcod.desaturated_green, blocks=True, fighter=fighter_component, ai=ai_component)
             elif choice < 20+40:
-                fighter_component = Fighter(hp=15, defense=0, power=4)
+                fighter_component = Fighter(hp=15, defense=0, power=4, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'o', 'orc', libtcod.orange, blocks=True, fighter=fighter_component, ai=ai_component)
             elif choice < 20+40+10:
-                fighter_component = Fighter(hp=20, defense=0, power=5)
+                fighter_component = Fighter(hp=20, defense=0, power=5, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'd', 'dragon', libtcod.red, blocks=True, fighter=fighter_component, ai=ai_component)
             else:
-                fighter_component = Fighter(hp=25, defense=0, power=6)
+                fighter_component = Fighter(hp=25, defense=0, power=6, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'T', 'troll', libtcod.green, blocks=True, fighter=fighter_component, ai=ai_component)
                             
@@ -358,11 +386,19 @@ def render_all():
                         libtcod.console_set_char_background(con, x, y, color_light_ground, libtcod.BKGND_SET)
                     map[x][y].explored = True
     
+    #draw all objects in list except player, then draw player
     for object in objects:
-        object.draw()
-        
-    libtcod.console_blit(con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0) # display buffer 'con' information to the main terminal window
+        if object != player:
+            object.draw()
+    player.draw()
 
+    # display buffer 'con' information to the main terminal window    
+    libtcod.console_blit(con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0) 
+    
+    #show player's stats
+    libtcod.console_set_default_foreground(con, libtcod.white)
+    libtcod.console_print_ex(0, 1, SCREEN_HEIGHT - 2, libtcod.BKGND_NONE, libtcod.LEFT, 
+                             'HP: ' + str(player.fighter.hp) + '/' + str(player.fighter.max_hp))
 ############################################# 
 # Combat Routines
 #############################################
@@ -374,12 +410,12 @@ def player_move_or_attack(dx, dy):
     
     target = None
     for object in objects:
-        if object.x == x and object.y == y:
+        if object.fighter and object.x == x and object.y == y:
             target = object
             break
     
     if target is not None:
-        print 'The ' + target.name + ' laughs at your puny efforts to attack them!'
+        player.fighter.attack(target)
     else:
         player.move(dx, dy)
         fov_recompute = True
@@ -420,7 +456,27 @@ def handle_keys():
             player_move_or_attack (1, 0)
             fov_recompute = True
         else:
-            return 'didnt-take-turn' 
+            return 'didnt-take-turn'
+        
+def player_death(player):
+    #game over
+    global game_state
+    print 'You died!'
+    game_state = 'dead'
+    # turn player into a corpse
+    player.char = '%'
+    player.color = libtcod.dark_red
+    
+def monster_death(monster):
+    # monster turns into a corpse that doesn't block/attack/move
+    print monster.name.capitalize() + ' is dead.'
+    monster.char = '%'
+    monster.color = libtcod.dark_red
+    monster.blocks = False
+    monster.fighter = None
+    monster.ai = None
+    monster.name = 'remains of ' + monster.name
+    monster.send_to_back()
  
 #############################################
 # Initialization
@@ -434,7 +490,7 @@ libtcod.sys_set_fps(LIMIT_FPS)
 con = libtcod.console_new(SCREEN_WIDTH, SCREEN_HEIGHT) #creates an offscreen buffer called 'con'
 
 #create object representing the player
-fighter_component = Fighter(hp=30, defense=2, power=5)
+fighter_component = Fighter(hp=30, defense=2, power=5, death_function=player_death)
 player = Object(0, 0, '@', 'player', libtcod.white, blocks=True, fighter=fighter_component)
 
 objects = [player] #does it actually matter which order the entities are loaded in?
@@ -476,7 +532,7 @@ while not libtcod.console_is_window_closed():
     
     if game_state == 'playing' and player_action != 'didnt-take-turn':
         for object in objects:
-            if object != player:
-                print 'The ' + object.name + ' barfs!'
+            #if object != player:
+                #print 'The ' + object.name + ' barfs!'
             if object.ai:
                 object.ai.take_turn() 
