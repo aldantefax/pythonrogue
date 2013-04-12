@@ -25,6 +25,9 @@ MAX_ROOMS = 30
 # monster generation parameters
 MAX_ROOM_MONSTERS = 3
 
+# item generation parameters
+MAX_ROOM_ITEMS = 2
+
 # Field of View constants
 FOV_ALGO = 0 #use the default FOV algorithm
 FOV_LIGHT_WALLS = True
@@ -373,6 +376,21 @@ def place_objects(room):
                 monster = Object(x, y, 'T', 'troll', libtcod.darker_green, blocks=True, fighter=fighter_component, ai=ai_component)
                             
             objects.append(monster)
+            
+    #item generation
+    num_items = libtcod.random_get_int(0, 0, MAX_ROOM_ITEMS)
+    
+    for i in range(num_items):
+        #pick a random location for object generation
+        x = libtcod.random_get_int(0, room.x1+1, room.x2-1)
+        y = libtcod.random_get_int(0, room.y1+1, room.y2-1)
+        
+        if not is_blocked(x, y):
+            #create a healing potion
+            item = Object(x, y, '!', 'healing potion', libtcod.violet)
+            
+            objects.append(item)
+            item.send_to_back() #items will appear below other objects
     
 #############################################
 # draw all objects in the list and map tiles
@@ -594,7 +612,7 @@ def monster_death(monster):
 #############################################
  
 libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD) # game font
-libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, 'Module 7 - The GUI', False) # create the game window (not fullscreen)
+libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, 'Module 8 - Items and Inventory', False) # create the game window (not fullscreen)
 libtcod.sys_set_fps(LIMIT_FPS)
 
 # Initialize objects
